@@ -74,8 +74,8 @@ class StopJob(Job):
         if self.is_started:
             try:
                 os.kill(self.meta["workhorse_pid"], signal.SIGKILL)
-            except Exception, e:
-                print e
+            except Exception as e:
+                print(e)
 
         if delete:
             self.delete()
