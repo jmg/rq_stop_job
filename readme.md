@@ -96,6 +96,17 @@ python manage.py rqworker job_queue --job-class=rq_stop_job_app.jobs.stop_job.St
 
 ```
 
+Then if you want to stop a jobs just call
+
+```python
+import redis
+from app.jobs.stop_job import StopJob
+
+conn = redis.StrictRedis()
+job = StopJob.fetch(job_id, connection=conn)
+job.stop()
+```
+
 ## Conclusion
 
 I've this implementation running in a django production app and seems to be working without issues.
