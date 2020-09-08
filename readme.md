@@ -81,7 +81,7 @@ class StopJob(Job):
 
 **rq_stop_job/settings.py**
 
-You need to tell Django-RQ you use the StopJob class in setting.py
+You need to tell Django-RQ to use the StopJob class in setting.py
 
 ```python
 RQ = {
