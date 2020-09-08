@@ -7,4 +7,4 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
 
         job = job_queue.delay(1, 1)
-        print "Started {}".format(job.id)
+        print("Started {}".format(job.id))

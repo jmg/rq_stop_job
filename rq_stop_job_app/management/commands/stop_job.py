@@ -14,7 +14,7 @@ class Command(BaseCommand):
     def stop_job(self, job_id, conn):
 
         job = StopJob.fetch(job_id, connection=conn)
-        print "Stopping {}".format(job.id)
+        print("Stopping {}".format(job.id))
         job.stop()
 
     def handle(self, *args, **options):
