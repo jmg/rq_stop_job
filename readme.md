@@ -4,6 +4,8 @@ RQ doesn't provide a built-in feature to stop (kill) jobs once they are executin
 
 As discussed on https://github.com/rq/rq/issues/684 this is very useful if run heavy computational tasks that might need to be killed.
 
+**Important**: So far this implementation would only work if you are running the worker and calling the ```stop()``` method in the same machine. Won't work across different machines.
+
 ## Usage
 
 ### Run the Django-RQ worker
@@ -96,7 +98,7 @@ python manage.py rqworker job_queue --job-class=rq_stop_job_app.jobs.stop_job.St
 
 ```
 
-Then if you want to stop a jobs just call
+Then if you want to ```stop()``` a jobs just call
 
 ```python
 import redis
