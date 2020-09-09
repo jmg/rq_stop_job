@@ -4,7 +4,6 @@ RQ doesn't provide a built-in feature to stop (kill) jobs once they are executin
 
 As discussed on https://github.com/rq/rq/issues/684 this is very useful if run heavy computational tasks that might need to be killed.
 
-**Important**: So far this implementation would only work if you are running the worker and calling the ```stop()``` method in the same machine. Won't work across different machines.
 
 ## Usage
 
@@ -42,9 +41,9 @@ python manage.py stop_job <job_id>
 
 ## How it works
 
-The implementation is fairly simple. The **StopJob class** saves the RQ work-horse pid every time a new job is performed in the job metadata (this gets saved in the key-value storage).
+The implementation is fairly simple. The **PubSubWorker class** creates a pubsub channel to receive stop messages from jobs.
 
-When calling ```job.stop()``` the work-horse process is killed using the pid saved in the job metadata.
+When calling ```job.stop()``` in a **StopJob** object then a message is published using the pubsub channel for the job id. The message is received by the worker and the work-horse is killed.
 
 The RQ Worker process doesn't need to be killed so after killing the work-horse it's ready to execute the next job right away.
 
@@ -54,28 +53,43 @@ The RQ Worker process doesn't need to be killed so after killing the work-horse 
 import os
 import signal
 from rq.job import Job
+from rq.worker import Worker, SIGKILL
+
+
+class PubSubWorker(Worker):
+
+    def __init__(self, *args, **kwargs):
+
+        self.pubsub = None
+        super().__init__(*args, **kwargs)
+
+    def handle_stop_message(self, message):
+
+        if message.get('type') == 'message' and message.get('data') == b'stop' and self.horse_pid:
+            try:
+                self.kill_horse(SIGKILL)
+            except Exception as e:
+                self.log.exception("Failed to kill the horse thread")
+
+    def execute_job(self, job, queue):
+
+        if self.pubsub is None:
+            self.pubsub = self.connection.pubsub()
+
+        channel = 'rq:job:pubsub:{}'.format(job.id)
+
+        self.pubsub.subscribe(**{channel: self.handle_stop_message})
+        self.pubsub.run_in_thread(sleep_time=0.1)
+
+        return super().execute_job(job, queue)
 
 
 class StopJob(Job):
-    """
-        A job that can be stopped (Killed) using the workhorse PID.
-        It saves the workhorse PID in storage every time a workhorse is forked by RQ.
-    """
-    def perform(self):
-
-        self.meta["workhorse_pid"] = os.getpid()
-        #save the workhorse PID in the job metadata
-        self.save_meta()
-
-        return super(StopJob, self).perform()
 
     def stop(self, delete=True):
 
         if self.is_started:
-            try:
-                os.kill(self.meta["workhorse_pid"], signal.SIGKILL)
-            except Exception as e:
-                print(e)
+            self.connection.publish(channel='rq:job:pubsub:{}'.format(self.id), message="stop")
 
         if delete:
             self.delete()
@@ -83,22 +97,22 @@ class StopJob(Job):
 
 **rq_stop_job/settings.py**
 
-You need to tell Django-RQ to use the StopJob class in setting.py
+You need to tell Django-RQ to use the StopJob and the PubSubWorker classes in setting.py
 
 ```python
 RQ = {
     'JOB_CLASS': 'rq_stop_job_app.jobs.stop_job.StopJob',
+    'WORKER_CLASS': 'rq_stop_job_app.jobs.stop_job.PubSubWorker',
 }
 ```
 
-Or by running the RQ worker with ```--job-class=rq_stop_job_app.jobs.stop_job.StopJob```
+Or by running the RQ worker with ```--job-class=rq_stop_job_app.jobs.stop_job.StopJob --worker-class=rq_stop_job_app.jobs.stop_job.PubSubWorker```
 
 ```
-python manage.py rqworker job_queue --job-class=rq_stop_job_app.jobs.stop_job.StopJob
-
+python manage.py rqworker job_queue --job-class=rq_stop_job_app.jobs.stop_job.StopJob --worker-class=rq_stop_job_app.jobs.stop_job.PubSubWorker
 ```
 
-Then if you want to ```stop()``` a jobs just call
+Then if you want to ```stop()``` a job just call
 
 ```python
 import redis

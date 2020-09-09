@@ -116,4 +116,5 @@ RQ_QUEUES = {
 
 RQ = {
     'JOB_CLASS': 'rq_stop_job_app.jobs.stop_job.StopJob',
+    'WORKER_CLASS': 'rq_stop_job_app.jobs.stop_job.PubSubWorker',
 }
