@@ -1,15 +1,8 @@
-import os
-import signal
 from rq.job import Job
 from rq.worker import Worker, SIGKILL
 
 
 class PubSubWorker(Worker):
-
-    def __init__(self, *args, **kwargs):
-
-        self.pubsub = None
-        super().__init__(*args, **kwargs)
 
     def handle_stop_message(self, message):
 
@@ -21,15 +14,20 @@ class PubSubWorker(Worker):
 
     def execute_job(self, job, queue):
 
-        if self.pubsub is None:
-            self.pubsub = self.connection.pubsub()
-
+        pubsub = self.connection.pubsub()
         channel = 'rq:job:pubsub:{}'.format(job.id)
 
-        self.pubsub.subscribe(**{channel: self.handle_stop_message})
-        self.pubsub.run_in_thread(sleep_time=0.1)
+        pubsub.subscribe(**{channel: self.handle_stop_message})
 
-        return super().execute_job(job, queue)
+        #listen for stop events in a thread
+        pubsub_thread = pubsub.run_in_thread(sleep_time=0.1)
+
+        val = super(PubSubWorker, self).execute_job(job, queue)
+
+        #after the job is done stop the pubsub thread
+        pubsub_thread.stop()
+
+        return val
 
 
 class StopJob(Job):
